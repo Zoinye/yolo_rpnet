@@ -205,6 +205,7 @@ def train(hyp, opt, device, callbacks):
             LOGGER.info(f"freezing {k}")
             v.requires_grad = False
 
+
     # Image size
     gs = max(int(model.stride.max()), 32)  # grid size (max stride)
     imgsz = check_img_size(opt.imgsz, gs, floor=gs * 2)  # verify imgsz is gs-multiple
