@@ -158,11 +158,11 @@ class BaseModel(nn.Module):
         visualization.
         """
         return self._forward_once(x, profile, visualize)  # single-scale inference, train
-
     def _forward_once(self, x, profile=False, visualize=False):
         """Performs a forward pass on the YOLOv5 model, enabling profiling and feature visualization options."""
         y, dt = [], []  # outputs
         z = []
+        combined_results = []
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
@@ -172,9 +172,27 @@ class BaseModel(nn.Module):
             y.append(x if m.i in self.save else None)  # save output
             if visualize:
                 feature_visualization(x, m.type, m.i, save_dir=visualize)
-            if m == 'models.yolo.Detect':
+            if isinstance(m, Detect):
                 z.append(x if m.i in self.save else None)
-        return x
+            elif isinstance(m, CombinedModel):
+                combined_results.append(x)
+        return x, z
+    # def _forward_once(self, x, profile=False, visualize=False):
+    #     """Performs a forward pass on the YOLOv5 model, enabling profiling and feature visualization options."""
+    #     y, dt = [], []  # outputs
+    #     z = []
+    #     for m in self.model:
+    #         if m.f != -1:  # if not from previous layer
+    #             x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
+    #         if profile:
+    #             self._profile_one_layer(m, x, dt)
+    #         x = m(x)  # run,这个是detect检测出来的三个特征图
+    #         y.append(x if m.i in self.save else None)  # save output
+    #         if visualize:
+    #             feature_visualization(x, m.type, m.i, save_dir=visualize)
+    #         if m == 'models.yolo.Detect':
+    #             z.append(x if m.i in self.save else None)
+    #     return x,z
 
     def _profile_one_layer(self, m, x, dt):
         """Profiles a single layer's performance by computing GFLOPs, execution time, and parameters."""
@@ -210,7 +228,7 @@ class BaseModel(nn.Module):
         buffers.
         """
         self = super()._apply(fn)
-        m = self.model[-1]  # Detect()
+        m = self.model[-2]  # Detect()
         if isinstance(m, (Detect, Segment)):
             m.stride = fn(m.stride)
             m.grid = list(map(fn, m.grid))
@@ -251,7 +269,10 @@ class DetectionModel(BaseModel):
             s = 256  # 2x min stride
             m.inplace = self.inplace
             forward = lambda x: self.forward(x)[0] if isinstance(m, Segment) else self.forward(x)
-            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, ch, s, s))])  # forward
+            _,rs=forward(torch.zeros(1, ch, s, s))
+            m.stride = torch.tensor([s / x.shape[-2] for x in rs[0]])  # forward torch.Size([1, 3, 32, 32, 8])
+            # if m.stride==torch.tensor([]):
+            #     m.stride = torch.tensor([8, 16, 32])
             check_anchor_order(m)
             m.anchors /= m.stride.view(-1, 1, 1)
             self.stride = m.stride
@@ -320,7 +341,7 @@ class DetectionModel(BaseModel):
         For details see https://arxiv.org/abs/1708.02002 section 3.3.
         """
         # cf = torch.bincount(torch.tensor(np.concatenate(dataset.labels, 0)[:, 0]).long(), minlength=nc) + 1.
-        m = self.model[-1]  # Detect() module
+        m = self.model[-2]  # Detect() module
         for mi, s in zip(m.m, m.stride):  # from
             b = mi.bias.view(m.na, -1)  # conv.bias(255) to (3,85)
             b.data[:, 4] += math.log(8 / (640 / s) ** 2)  # obj (8 objects per 640 image)
