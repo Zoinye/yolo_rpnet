@@ -30,6 +30,8 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
+from load_data import labelFpsDataLoader
+
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
@@ -223,6 +225,9 @@ def run(
     pbar = tqdm(dataloader, desc=s, bar_format=TQDM_BAR_FORMAT)  # progress bar
     for batch_i, (im, targets, paths, shapes) in enumerate(pbar):
         callbacks.run("on_val_batch_start")
+        data_loader = labelFpsDataLoader(paths, imgsz)
+        new_labels, lbl, img_name = data_loader.__getitem__(0)
+        YI = [int(ee) for ee in lbl.split('_')[:7]]
         with dt[0]:
             if cuda:
                 im = im.to(device, non_blocking=True)
@@ -237,7 +242,7 @@ def run(
 
         # Loss
         if compute_loss:
-            loss += compute_loss(train_out, targets)[1]  # box, obj, cls
+            loss += compute_loss(train_out, targets,YI)[1]  # box, obj, cls
 
         # NMS
         targets[:, 2:] *= torch.tensor((width, height, width, height), device=device)  # to pixels

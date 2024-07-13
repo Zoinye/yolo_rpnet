@@ -158,7 +158,7 @@ class BaseModel(nn.Module):
         visualization.
         """
         return self._forward_once(x, profile, visualize)  # single-scale inference, train
-    def _forward_once(self, x, profile=False, visualize=False):
+    def _forward_once(self, x,car_detect, profile=False, visualize=False):
         """Performs a forward pass on the YOLOv5 model, enabling profiling and feature visualization options."""
         y, dt = [], []  # outputs
         z = []
@@ -168,7 +168,10 @@ class BaseModel(nn.Module):
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
             if profile:
                 self._profile_one_layer(m, x, dt)
-            x = m(x)  # run,这个是detect检测出来的三个特征图
+            if isinstance(m, CombinedModel):
+                x = m(x,car_detect)  # run,这个是detect检测出来的三个特征图
+            else :
+                x = m(x)
             y.append(x if m.i in self.save else None)  # save output
             if visualize:
                 feature_visualization(x, m.type, m.i, save_dir=visualize)
@@ -239,9 +242,10 @@ class BaseModel(nn.Module):
 
 class DetectionModel(BaseModel):
     # YOLOv5 detection model
-    def __init__(self, cfg="yolov5s.yaml", ch=3, nc=None, anchors=None):
+    def __init__(self, car_detect,cfg="yolov5s.yaml", ch=3, nc=None, anchors=None):
         """Initializes YOLOv5 model with configuration file, input channels, number of classes, and custom anchors."""
         super().__init__()
+
         if isinstance(cfg, dict):
             self.yaml = cfg  # model dict
         else:  # is *.yaml
@@ -250,7 +254,7 @@ class DetectionModel(BaseModel):
             self.yaml_file = Path(cfg).name
             with open(cfg, encoding="ascii", errors="ignore") as f:
                 self.yaml = yaml.safe_load(f)  # model dict
-
+        # self.car_detect = car_detect
         # Define model
         ch = self.yaml["ch"] = self.yaml.get("ch", ch)  # input channels
         if nc and nc != self.yaml["nc"]:
@@ -268,7 +272,7 @@ class DetectionModel(BaseModel):
         if isinstance(m, (Detect, Segment)):
             s = 256  # 2x min stride
             m.inplace = self.inplace
-            forward = lambda x: self.forward(x)[0] if isinstance(m, Segment) else self.forward(x)
+            forward = lambda x: self.forward(x)[0] if isinstance(m, Segment) else self.forward(x,car_detect)
             _,rs=forward(torch.zeros(1, ch, s, s))
             m.stride = torch.tensor([s / x.shape[-2] for x in rs[0]])  # forward torch.Size([1, 3, 32, 32, 8])
             # if m.stride==torch.tensor([]):
@@ -283,11 +287,11 @@ class DetectionModel(BaseModel):
         self.info()
         LOGGER.info("")
 
-    def forward(self, x, augment=False, profile=False, visualize=False):
+    def forward(self, x, car_detect,augment=False, profile=False, visualize=False):
         """Performs single-scale or augmented inference and may include profiling or visualization."""
         if augment:
             return self._forward_augment(x)  # augmented inference, None
-        return self._forward_once(x, profile, visualize)  # single-scale inference, train
+        return self._forward_once(x,car_detect, profile, visualize)  # single-scale inference, train
 
     def _forward_augment(self, x):
         """Performs augmented inference across different scales and flips, returning combined detections."""

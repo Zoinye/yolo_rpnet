@@ -175,8 +175,8 @@ class ComputeLoss:
 
                 # car loss
                 for j in range(7):
-                    l = Variable(torch.LongTensor([el[j] for el in YI]).cuda(0))  # 一列一列看的
-                    lcar += self.criterion(p[0][j], l)
+                    l = Variable(torch.LongTensor(YI[j]).cuda(0))  # 一列一列看的
+                    lcar += self.criterion(p[0], l)
 
                 # Append targets to text file
                 # with open('targets.txt', 'a') as file:
@@ -224,7 +224,7 @@ class ComputeLoss:
         )  # offsets
 
         for i in range(self.nl):
-            anchors, shape = self.anchors[i], p[i].shape
+            anchors, shape = self.anchors[i], p[1][0][i].shape
             gain[2:6] = torch.tensor(shape)[[3, 2, 3, 2]]  # xyxy gain
 
             # Match targets to anchors
