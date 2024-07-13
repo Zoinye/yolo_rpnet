@@ -49,5 +49,5 @@ head: [
 #    [[17, 20, 23], 1, CombinedModel, [Detect,False] ]
 
     [[17, 20, 23], 1, Detect, [nc, anchors]], # Detect(P3, P4, P5)
-    [24, 1, CombinedModel, [640,38,25,35]]
+    [24, 1, CombinedModel, [40,38,25,35]]
   ]
