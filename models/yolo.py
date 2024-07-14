@@ -242,7 +242,7 @@ class BaseModel(nn.Module):
 
 class DetectionModel(BaseModel):
     # YOLOv5 detection model
-    def __init__(self, car_detect,cfg="yolov5s.yaml", ch=3, nc=None, anchors=None):
+    def __init__(self, cfg="yolov5s.yaml", ch=3, nc=None, anchors=None):
         """Initializes YOLOv5 model with configuration file, input channels, number of classes, and custom anchors."""
         super().__init__()
 
@@ -272,6 +272,7 @@ class DetectionModel(BaseModel):
         if isinstance(m, (Detect, Segment)):
             s = 256  # 2x min stride
             m.inplace = self.inplace
+            car_detect=torch.zeros(7,)
             forward = lambda x: self.forward(x)[0] if isinstance(m, Segment) else self.forward(x,car_detect)
             _,rs=forward(torch.zeros(1, ch, s, s))
             m.stride = torch.tensor([s / x.shape[-2] for x in rs[0]])  # forward torch.Size([1, 3, 32, 32, 8])

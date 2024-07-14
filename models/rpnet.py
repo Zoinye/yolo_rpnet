@@ -133,7 +133,7 @@ def make_divisible(x, divisor):
 class LicensePlateClassifier(nn.Module):
     def __init__(self, input_size=640, prov_num=38, alpha_num=25, ad_num=35):
         super(LicensePlateClassifier, self).__init__()
-
+        self.output_size = prov_num + alpha_num + ad_num  # 假设这是你的输出尺寸
         self.features = nn.Sequential(
             nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1),
             nn.ReLU(inplace=True),
@@ -224,9 +224,10 @@ import torch.nn.functional as F
 
 
 class CombinedModel(nn.Module):
-    def __init__(self, input_size=640, prov_num=38, alpha_num=25, ad_num=35, conf_thres=0.25, iou_thres=0.45):
+    def __init__(self, input_size=640, prov_num=38, alpha_num=25, ad_num=35, conf_thres=0.25, iou_thres=0.45, device='cuda'):
         super(CombinedModel, self).__init__()
-        self.license_plate_classifier = LicensePlateClassifier(input_size, prov_num, alpha_num, ad_num)
+        self.device = device
+        self.license_plate_classifier = LicensePlateClassifier(input_size, prov_num, alpha_num, ad_num).to(device)
         self.conf_thres = conf_thres
         self.iou_thres = iou_thres
         self.detection_criterion = nn.MSELoss()  # Example detection loss (e.g., MSELoss)
@@ -234,33 +235,52 @@ class CombinedModel(nn.Module):
     def forward(self, x, detection_targets):
         results = []
         detection_losses = []
+
         pred = non_max_suppression(x)
+
         for i, roi in enumerate(pred):
-            x1, y1, x2, y2 = map(int, roi)
+            if roi is None or len(roi) < 4:
+                continue  # 跳过无效的或不完整的ROI
+
+            x1, y1, x2, y2 = map(int, roi[:4])
             roi = x[:, :, y1:y2, x1:x2]  # Crop region of interest
 
             # Ensure ROI is large enough to avoid issues
             if roi.size(2) > 0 and roi.size(3) > 0:
                 # Calculate detection loss for the current ROI
-                detection_loss = self.detection_criterion(torch.tensor([x1, y1, x2, y2], dtype=torch.float32),
-                                                          detection_targets[i])
+                detection_loss = self.detection_criterion(
+                    torch.tensor([x1, y1, x2, y2], dtype=torch.float32, device=self.device),
+                    detection_targets[i].to(self.device)
+                )
                 detection_losses.append(detection_loss.item())
 
                 if detection_loss.item() > self.conf_thres:
                     # Proceed with license plate detection if detection loss is above the threshold
                     roi_height = roi.size(2) // 7
+                    character_preds = []
                     for j in range(7):
                         sub_roi = roi[:, :, j * roi_height:(j + 1) * roi_height, :]
-                        pooled_roi = roi_pooling_ims(sub_roi, torch.tensor(
-                            [[0, x1, y1 + j * roi_height, x2, y1 + (j + 1) * roi_height]]), size=(8, 16))  # ROI pooling
+                        pooled_roi = roi_pooling_ims(
+                            sub_roi, torch.tensor([[0, x1, y1 + j * roi_height, x2, y1 + (j + 1) * roi_height]], device=self.device), size=(8, 16)
+                        )  # ROI pooling
                         class_preds = self.license_plate_classifier(pooled_roi)
-                        results.append((class_preds, (x1, y1 + j * roi_height, x2, y1 + (j + 1) * roi_height)))
+                        character_preds.append(class_preds)
 
-        total_detection_loss = sum(detection_losses)
-        return results, total_detection_loss
+                    # 将每个字符的预测结果拼接成一个单独的张量
+                    results.append(torch.cat(character_preds, dim=1))
 
-    def compute_loss(self, detections, targets):
-        detection_loss = 0
-        for detection, target in zip(detections, targets):
-            detection_loss += self.detection_criterion(detection, target)
-        return detection_loss
+        # 将所有结果拼接成最终的张量
+        # if results:
+        #     results_tensor = torch.cat(results, dim=0)
+        # else:
+        #     results_tensor = torch.zeros((0, 7), device=self.device)
+        if any(results):  # 检查 results 中是否有非空的元素
+            results_tensor = torch.cat(results, dim=0)
+        else:
+            results_tensor = torch.zeros((0, 7), device=self.device)
+
+        return results_tensor
+
+
+
+

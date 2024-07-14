@@ -174,9 +174,16 @@ class ComputeLoss:
                     lcls += self.BCEcls(pcls, t)  # BCE
 
                 # car loss
+
                 for j in range(7):
-                    l = Variable(torch.LongTensor(YI[j]).cuda(0))  # 一列一列看的
-                    lcar += self.criterion(p[0], l)
+                    # l = torch.tensor([YI[j]]).cuda(0)
+                    # # l = torch.LongTensor(YI[j]).cuda(0)  # 一列一列看的
+                    # lcar += self.criterion(p[0].float(), l.long())
+                    if p[0].size(0) == 0:  # 检查 pred[0] 是否为空
+                        lcar = torch.tensor(1.0, device=self.device)  # 设置损失为 1.0
+                    else:
+                        l = torch.tensor(YI[j], device=self.device).long()  # 计算目标
+                        lcar = self.criterion(p[0], l)
 
                 # Append targets to text file
                 # with open('targets.txt', 'a') as file:
@@ -194,6 +201,7 @@ class ComputeLoss:
         lcls *= self.hyp["cls"]
         lcar *= self.hyp["car"]
         bs = tobj.shape[0]  # batch size
+        lcar = lcar.view(-1)
 
         return (lbox + lobj + lcls + lcar) * bs, torch.cat((lbox, lobj, lcls, lcar)).detach()
 
