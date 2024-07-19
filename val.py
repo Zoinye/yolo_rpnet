@@ -238,7 +238,7 @@ def run(
 
         # Inference
         with dt[1]:
-            preds,train_out = model(im, YI) if compute_loss else (model(im, YI, augment=augment), None)
+            preds,train_out = model(im, new_labels,YI) if compute_loss else (model(im, new_labels,YI, augment=augment), None)
             # preds, train_out = model(im,YI) if compute_loss else (model(im,YI, augment=augment), None)
             p=[]
             p.append(preds)

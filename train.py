@@ -359,6 +359,7 @@ def train(hyp, opt, device, callbacks):
         optimizer.zero_grad()
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             data_loader =labelFpsDataLoader(paths,imgsz)
+            # for i in range(len(paths)):
             new_labels, lbl, img_name = data_loader.__getitem__(0)
             YI = [int(ee) for ee in lbl.split('_')[:7]]
             YI_tensor = torch.tensor(YI)
@@ -389,7 +390,7 @@ def train(hyp, opt, device, callbacks):
 
             # Forward
             with torch.cuda.amp.autocast(amp):
-                pred = model(imgs,new_labels)  # forward
+                pred = model(imgs,new_labels,YI)  # forward
                 loss, loss_items = compute_loss(pred, targets.to(device),YI)  # loss scaled by batch_size
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
@@ -528,7 +529,7 @@ def parse_opt(known=False):
     parser.add_argument("--data", type=str, default=ROOT / "data/coco128.yaml", help="dataset.yaml path")
     parser.add_argument("--hyp", type=str, default=ROOT / "data/hyps/hyp.scratch-low.yaml", help="hyperparameters path")
     parser.add_argument("--epochs", type=int, default=100, help="total training epochs")
-    parser.add_argument("--batch-size", type=int, default=1, help="total batch size for all GPUs, -1 for autobatch")
+    parser.add_argument("--batch-size", type=int, default=4, help="total batch size for all GPUs, -1 for autobatch")
     parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=640, help="train, val image size (pixels)")
     parser.add_argument("--rect", action="store_true", help="rectangular training")
     parser.add_argument("--resume", nargs="?", const=True, default=False, help="resume most recent training")

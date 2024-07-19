@@ -158,7 +158,7 @@ class BaseModel(nn.Module):
         visualization.
         """
         return self._forward_once(x, profile, visualize)  # single-scale inference, train
-    def _forward_once(self, x,car_detect, profile=False, visualize=False):
+    def _forward_once(self, x,car_detect,YI, profile=False, visualize=False):
         """Performs a forward pass on the YOLOv5 model, enabling profiling and feature visualization options."""
         y, dt = [], []  # outputs
         z = []
@@ -169,7 +169,7 @@ class BaseModel(nn.Module):
             if profile:
                 self._profile_one_layer(m, x, dt)
             if isinstance(m, CombinedModel):
-                x = m(x,car_detect)  # run,这个是detect检测出来的三个特征图
+                x = m(x,car_detect,YI)  # run,这个是detect检测出来的三个特征图
             else :
                 x = m(x)
             y.append(x if m.i in self.save else None)  # save output
@@ -288,11 +288,11 @@ class DetectionModel(BaseModel):
         self.info()
         LOGGER.info("")
 
-    def forward(self, x, car_detect=[0,0,0,0],augment=False, profile=False, visualize=False):
+    def forward(self, x, car_detect=[0,0,0,0],YI=[0,0,0,0,0,0,0,0],augment=False, profile=False, visualize=False):
         """Performs single-scale or augmented inference and may include profiling or visualization."""
         if augment:
             return self._forward_augment(x)  # augmented inference, None
-        return self._forward_once(x,car_detect, profile, visualize)  # single-scale inference, train
+        return self._forward_once(x,car_detect,YI, profile, visualize)  # single-scale inference, train
 
     def _forward_augment(self, x):
         """Performs augmented inference across different scales and flips, returning combined detections."""

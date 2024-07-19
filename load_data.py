@@ -35,7 +35,6 @@ class labelFpsDataLoader(Dataset):
     def __len__(self):
         return 1
 
-
 class labelTestDataLoader(Dataset):
     def __init__(self, img_dir, imgSize, is_transform=None):
         self.img_dir = img_dir
