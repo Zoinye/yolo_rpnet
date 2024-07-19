@@ -272,8 +272,8 @@ class DetectionModel(BaseModel):
         if isinstance(m, (Detect, Segment)):
             s = 256  # 2x min stride
             m.inplace = self.inplace
-            car_detect=torch.zeros(7,)
-            forward = lambda x: self.forward(x)[0] if isinstance(m, Segment) else self.forward(x,car_detect)
+            car_detect=[0,0,0,0]
+            forward = lambda x: self.forward(x)[0] if isinstance(m, Segment) else self.forward(x)
             _,rs=forward(torch.zeros(1, ch, s, s))
             m.stride = torch.tensor([s / x.shape[-2] for x in rs[0]])  # forward torch.Size([1, 3, 32, 32, 8])
             # if m.stride==torch.tensor([]):
@@ -288,7 +288,7 @@ class DetectionModel(BaseModel):
         self.info()
         LOGGER.info("")
 
-    def forward(self, x, car_detect,augment=False, profile=False, visualize=False):
+    def forward(self, x, car_detect=[0,0,0,0],augment=False, profile=False, visualize=False):
         """Performs single-scale or augmented inference and may include profiling or visualization."""
         if augment:
             return self._forward_augment(x)  # augmented inference, None

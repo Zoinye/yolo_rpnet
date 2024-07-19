@@ -23,7 +23,7 @@ class labelFpsDataLoader(Dataset):
 
         iname = img_name.rsplit('/', 1)[-1].rsplit('.', 1)[0].split('-')
         [left_up, right_down] = [[int(eel) for eel in el.split('&')] for el in iname[2].split('_')]
-        ori_w, ori_h = 640,640
+        ori_w, ori_h = [float(int(el)) for el in [img.shape[1], img.shape[0]]]
         # new_labels = [(left_up[0] + right_down[0]) / (2 * ori_w), (left_up[1] + right_down[1]) / (2 * ori_h),
         #               (right_down[0] - left_up[0]) / ori_w, (right_down[1] - left_up[1]) / ori_h]  # xywh
         new_labels = [(left_up[0] + right_down[0]) / (2 * ori_w), (left_up[1] + right_down[1]) / (2 * ori_h),
