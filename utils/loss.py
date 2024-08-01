@@ -111,6 +111,7 @@ class ComputeLoss:
 
         # Define criteria
         self.criterion = nn.CrossEntropyLoss()
+        # self.criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([h["cls_pw"]], device=device))
         BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([h["cls_pw"]], device=device))
         BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([h["obj_pw"]], device=device))
 
@@ -174,16 +175,9 @@ class ComputeLoss:
                     lcls += self.BCEcls(pcls, t)  # BCE
 
                 # car loss
-
-                for j in range(7):
-                    # l = torch.tensor([YI[j]]).cuda(0)
-                    # # l = torch.LongTensor(YI[j]).cuda(0)  # 一列一列看的
-                    # lcar += self.criterion(p[0].float(), l.long())
-                    if p[0].size(0) == 0:  # 检查 pred[0] 是否为空
-                        lcar = torch.tensor(1.0, device=self.device)  # 设置损失为 1.0
-                    else:
-                        l = torch.tensor(YI[j], device=self.device).long()  # 计算目标
-                        lcar = self.criterion(p[0], l)
+        for j in range(7):
+            l = Variable(torch.LongTensor([el[j] for el in YI]).cuda(0))
+            lcar += self.criterion(p[0][0][j], l)
 
                 # Append targets to text file
                 # with open('targets.txt', 'a') as file:

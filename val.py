@@ -225,9 +225,15 @@ def run(
     pbar = tqdm(dataloader, desc=s, bar_format=TQDM_BAR_FORMAT)  # progress bar
     for batch_i, (im, targets, paths, shapes) in enumerate(pbar):
         callbacks.run("on_val_batch_start")
-        data_loader = labelFpsDataLoader(paths, imgsz)
-        new_labels, lbl, img_name = data_loader.__getitem__(0)
-        YI = [int(ee) for ee in lbl.split('_')[:7]]
+        boxloc = []
+        character = []
+        for bt in range(len(paths)):
+            data_loader = labelFpsDataLoader(paths[bt], imgsz)
+            new_labels, lbl, _ = data_loader.__getitem__(0)  # 位置，车牌号
+            boxloc.append(new_labels)
+            character.append(lbl)
+        # YI = [int(ee) for ee in lbl.split('_')[:7]]
+        YI = [[int(ee) for ee in lbl.split('_')[:7]] for lbl in character]
         with dt[0]:
             if cuda:
                 im = im.to(device, non_blocking=True)
@@ -238,7 +244,7 @@ def run(
 
         # Inference
         with dt[1]:
-            preds,train_out = model(im, new_labels,YI) if compute_loss else (model(im, new_labels,YI, augment=augment), None)
+            preds,train_out = model(im, boxloc,YI) if compute_loss else (model(im, boxloc,YI, augment=augment), None)
             # preds, train_out = model(im,YI) if compute_loss else (model(im,YI, augment=augment), None)
             p=[]
             p.append(preds)

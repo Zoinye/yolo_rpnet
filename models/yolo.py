@@ -288,7 +288,7 @@ class DetectionModel(BaseModel):
         self.info()
         LOGGER.info("")
 
-    def forward(self, x, car_detect=[0,0,0,0],YI=[0,0,0,0,0,0,0,0],augment=False, profile=False, visualize=False):
+    def forward(self, x, car_detect=[0,0,0,0],YI=[0,0,0,0,0,0,0],augment=False, profile=False, visualize=False):
         """Performs single-scale or augmented inference and may include profiling or visualization."""
         if augment:
             return self._forward_augment(x)  # augmented inference, None
@@ -459,28 +459,11 @@ def parse_model(d, ch):
             c2 = sum(ch[x] for x in f)
         # TODO: channel, gw, gd
         elif m in {Detect, Segment}:
-            # if m is CombinedModel:
-            # detect_model = layers[-1]  # Get the last layer as detect model
-            # input_size = (3, 8, 16)  # example input size
-            # prov_num, alpha_num, ad_num = 38, 25, 35
-            # license_plate_classifier = LicensePlateClassifier(input_size=640,prov_num=38,alpha_num=25,ad_num=35)
-            # m_ = CombinedModel()
-            # layers.append(m_)
-            # save.append(i)
-            # # LOGGER.info(f"{i:>3}{str(f):>18}{n_:>3}{m_.np:10.0f}  {'CombinedModel':<40}{str(args):<30}")  # print
-            # ch.append(ch[-1])  # Keep channel count same for CombinedModel
             args.append([ch[x] for x in f])
             if isinstance(args[1], int):  # number of anchors
                 args[1] = [list(range(args[1] * 2))] * len(f)
         elif m is CombinedModel:
             pass
-            # m_ = CombinedModel()
-            # layers.append(m_)
-            # save.append(i)
-            # ch.append(ch[-1])  # Keep channel count same for CombinedModel
-            # # Modify args as needed for CombinedModel initialization
-            # args.append([ch[x] for x in f])  # Example modification
-
         elif m is Contract:
             c2 = ch[f] * args[0] ** 2
         elif m is Expand:
