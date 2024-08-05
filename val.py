@@ -219,7 +219,7 @@ def run(
     s = ("%22s" + "%11s" * 6) % ("Class", "Images", "Instances", "P", "R", "mAP50", "mAP50-95")
     tp, fp, p, r, f1, mp, mr, map50, ap50, map = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
     dt = Profile(device=device), Profile(device=device), Profile(device=device)  # profiling times
-    loss = torch.zeros(4, device=device)
+    loss = torch.zeros(5, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
     callbacks.run("on_val_start")
     pbar = tqdm(dataloader, desc=s, bar_format=TQDM_BAR_FORMAT)  # progress bar
@@ -234,6 +234,7 @@ def run(
             character.append(lbl)
         # YI = [int(ee) for ee in lbl.split('_')[:7]]
         YI = [[int(ee) for ee in lbl.split('_')[:7]] for lbl in character]
+        # boxloc = torch.tensor(boxloc)
         with dt[0]:
             if cuda:
                 im = im.to(device, non_blocking=True)
@@ -253,7 +254,8 @@ def run(
             p.append(tp)
         # Loss
         if compute_loss:
-            loss += compute_loss(p, targets,YI)[1]  # box, obj, cls
+            fps = preds[2]
+            loss += compute_loss(p, targets,YI,fps)[1]  # box, obj, cls
 
         # NMS
         targets[:, 2:] *= torch.tensor((width, height, width, height), device=device)  # to pixels

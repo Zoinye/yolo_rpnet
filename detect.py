@@ -97,6 +97,15 @@ def run(
     dnn=False,  # use OpenCV DNN for ONNX inference
     vid_stride=1,  # video frame-rate stride
 ):
+    provNum, alphaNum, adNum = 38, 25, 35
+    provinces = ["皖", "沪", "津", "渝", "冀", "晋", "蒙", "辽", "吉", "黑", "苏", "浙", "京", "闽", "赣", "鲁", "豫",
+                 "鄂", "湘", "粤", "桂",
+                 "琼", "川", "贵", "云", "藏", "陕", "甘", "青", "宁", "新", "警", "学", "O"]
+    alphabets = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
+                 'W',
+                 'X', 'Y', 'Z', 'O']
+    ads = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+           'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'O']
     source = str(source)
     save_img = not nosave and not source.endswith(".txt")  # save inference images
     is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
@@ -154,15 +163,19 @@ def run(
                 pred = [pred, None]
             else:
                 pred = model(im, augment=augment, visualize=visualize)
+        car_pred,pred=pred
+        y_pred,fps_pred=car_pred
         # NMS
         with dt[2]:
-            pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
+            pred = non_max_suppression(pred[0], conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
 
         # Second-stage classifier (optional)
         # pred = utils.general.apply_classifier(pred, classifier_model, im, im0s)
 
         # Define the path for the CSV file
         csv_path = save_dir / "predictions.csv"
+
+
 
         # Create or append to the CSV file
         def write_to_csv(image_name, prediction, confidence):
@@ -190,6 +203,8 @@ def run(
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+
+
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
@@ -250,6 +265,22 @@ def run(
                         save_path = str(Path(save_path).with_suffix(".mp4"))  # force *.mp4 suffix on results videos
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
                     vid_writer[i].write(im0)
+        outputY = [el.data.cpu().numpy().tolist() for el in y_pred[0]]
+        labelPred = [t[0].index(max(t[0])) for t in outputY]
+
+        [cx, cy, w, h] = fps_pred.data.cpu().numpy()[0].tolist()
+        left_up = [(cx - w / 2) * im0.shape[1], (cy - h / 2) * im0.shape[0]]
+        right_down = [(cx + w / 2) * im0.shape[1], (cy + h / 2) * im0.shape[0]]
+        cv2.rectangle(im0, (int(left_up[0]), int(left_up[1])), (int(right_down[0]), int(right_down[1])),
+                      (0, 0, 255), 2)
+        # pro=provinces[labelPred[0]]
+        #   The first character is Chinese character, can not be printed normally, thus is omitted.
+        lpn = alphabets[labelPred[1]] + ads[labelPred[2]] + ads[labelPred[3]] + ads[labelPred[4]] + ads[
+            labelPred[5]] + ads[labelPred[6]]
+        cv2.putText(im0, lpn, (200, 400), cv2.FONT_ITALIC, 2, (0, 0, 255))
+        # cv2.imwrite(im, im0)
+        cv2.imwrite(save_path, im0)
+
 
         # Print time (inference-only)
         LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1E3:.1f}ms")
@@ -267,14 +298,14 @@ def run(
 def parse_opt():
     """Parses command-line arguments for YOLOv5 detection, setting inference options and model configurations."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "yolov5s.pt", help="model path or triton URL")
-    parser.add_argument("--source", type=str, default=ROOT / "data/images", help="file/dir/URL/glob/screen/0(webcam)")
+    parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "runs/train/exp488/weights/best.pt", help="model path or triton URL")
+    parser.add_argument("--source", type=str, default=ROOT / "dataset/images/val/01343151341-94_90-445&535_619&612-604&616_440&597_456&521_620&540-0_0_17_6_26_31_31-107-23.jpg", help="file/dir/URL/glob/screen/0(webcam)")
     parser.add_argument("--data", type=str, default=ROOT / "data/coco128.yaml", help="(optional) dataset.yaml path")
     parser.add_argument("--imgsz", "--img", "--img-size", nargs="+", type=int, default=[640], help="inference size h,w")
     parser.add_argument("--conf-thres", type=float, default=0.25, help="confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.45, help="NMS IoU threshold")
     parser.add_argument("--max-det", type=int, default=1000, help="maximum detections per image")
-    parser.add_argument("--device", default="", help="cuda device, i.e. 0 or 0,1,2,3 or cpu")
+    parser.add_argument("--device", default="1", help="cuda device, i.e. 0 or 0,1,2,3 or cpu")
     parser.add_argument("--view-img", action="store_true", help="show results")
     parser.add_argument("--save-txt", action="store_true", help="save results to *.txt")
     parser.add_argument("--save-csv", action="store_true", help="save results in CSV format")

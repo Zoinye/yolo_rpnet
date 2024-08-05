@@ -349,11 +349,11 @@ def train(hyp, opt, device, callbacks):
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
         # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
 
-        mloss = torch.zeros(4, device=device)  # mean losses
+        mloss = torch.zeros(5, device=device)  # mean losses
         if RANK != -1:
             train_loader.sampler.set_epoch(epoch)
         pbar = enumerate(train_loader)
-        LOGGER.info(("\n" + "%11s" * 8) % ("Epoch", "GPU_mem", "box_loss", "obj_loss", "cls_loss","car_loss", "Instances", "Size"))
+        LOGGER.info(("\n" + "%11s" * 9) % ("Epoch", "GPU_mem", "box_loss", "obj_loss", "cls_loss","car_loss","fps_car" ,"Instances", "Size"))
         if RANK in {-1, 0}:
             pbar = tqdm(pbar, total=nb, bar_format=TQDM_BAR_FORMAT)  # progress bar
         optimizer.zero_grad()
@@ -368,6 +368,7 @@ def train(hyp, opt, device, callbacks):
             # YI = [int(ee) for ee in lbl.split('_')[:7]]
             YI = [[int(ee) for ee in lbl.split('_')[:7] ]for lbl in character]
             YI_tensor = torch.tensor(YI)
+            boxloc = torch.tensor(boxloc).to(device)
             # Y = np.array([el.numpy() for el in new_labels]).T
             # print(new_labels, lbl, img_name)
             callbacks.run("on_train_batch_start")
@@ -396,7 +397,8 @@ def train(hyp, opt, device, callbacks):
             # Forward
             with torch.cuda.amp.autocast(amp):
                 pred = model(imgs,boxloc,YI)  # forward
-                loss, loss_items = compute_loss(pred, targets.to(device),YI)  # loss scaled by batch_size
+                fps=pred[0][2]
+                loss, loss_items = compute_loss(pred, targets.to(device),YI,fps)  # loss scaled by batch_size
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:
@@ -418,10 +420,10 @@ def train(hyp, opt, device, callbacks):
 
             # Log
             if RANK in {-1, 0}:
-                mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
+                mloss = (mloss * i + loss_items) / (i + 2)  # update mean losses
                 mem = f"{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G"  # (GB)
                 pbar.set_description(
-                    ("%11s" * 2 + "%11.4g" * 6)
+                    ("%11s" * 2 + "%11.4g" * 7)
                     % (f"{epoch}/{epochs - 1}", mem, *mloss, targets.shape[0], imgs.shape[-1])
                 )
                 callbacks.run("on_train_batch_end", model, ni, imgs, targets, paths, list(mloss))
@@ -533,7 +535,7 @@ def parse_opt(known=False):
     parser.add_argument("--cfg", type=str, default=ROOT / "models/yolov5s.yaml", help="model.yaml path")
     parser.add_argument("--data", type=str, default=ROOT / "data/coco128.yaml", help="dataset.yaml path")
     parser.add_argument("--hyp", type=str, default=ROOT / "data/hyps/hyp.scratch-low.yaml", help="hyperparameters path")
-    parser.add_argument("--epochs", type=int, default=10, help="total training epochs")
+    parser.add_argument("--epochs", type=int, default=200, help="total training epochs")
     parser.add_argument("--batch-size", type=int, default=16, help="total batch size for all GPUs, -1 for autobatch")
     parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=640, help="train, val image size (pixels)")
     parser.add_argument("--rect", action="store_true", help="rectangular training")
@@ -550,7 +552,7 @@ def parse_opt(known=False):
     parser.add_argument("--bucket", type=str, default="", help="gsutil bucket")
     parser.add_argument("--cache", type=str, nargs="?", const="ram", help="image --cache ram/disk")
     parser.add_argument("--image-weights", action="store_true", help="use weighted image selection for training")
-    parser.add_argument("--device", default="0", help="cuda device, i.e. 0 or 0,1,2,3 or cpu")
+    parser.add_argument("--device", default="1", help="cuda device, i.e. 0 or 0,1,2,3 or cpu")
     parser.add_argument("--multi-scale", action="store_true", help="vary img-size +/- 50%%")
     parser.add_argument("--single-cls", action="store_true", help="train multi-class data as single-class")
     parser.add_argument("--optimizer", type=str, choices=["SGD", "Adam", "AdamW"], default="SGD", help="optimizer")

@@ -99,7 +99,12 @@ class QFocalLoss(nn.Module):
         else:  # 'none'
             return loss
 
-
+def iou_loss(pred_boxes, target_boxes):
+    """计算 IoU 损失"""
+    # 计算 IoU
+    iou = bbox_iou(pred_boxes, target_boxes, CIoU=True)
+    # IoU 损失是 1 减去 IoU
+    return 1 - iou.mean()
 class ComputeLoss:
     sort_obj_iou = False
 
@@ -111,6 +116,7 @@ class ComputeLoss:
 
         # Define criteria
         self.criterion = nn.CrossEntropyLoss()
+        self.fps_loss_fn = nn.MSELoss()
         # self.criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([h["cls_pw"]], device=device))
         BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([h["cls_pw"]], device=device))
         BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([h["obj_pw"]], device=device))
@@ -133,16 +139,24 @@ class ComputeLoss:
         self.anchors = m.anchors
         self.device = device
 
-
-    def __call__(self, p, targets,YI):  # predictions, targets
+    def __call__(self, p, targets,YI,boxloc):  # predictions, targets
         """Performs forward pass, calculating class, box, and object loss for given predictions and targets."""
         lcls = torch.zeros(1, device=self.device)  # class loss
         lbox = torch.zeros(1, device=self.device)  # box loss
         lobj = torch.zeros(1, device=self.device)  # object loss
         lcar = torch.zeros(1, device=self.device)
+        fpscar = boxloc
         tcls, tbox, indices, anchors = self.build_targets(p, targets)  # targets
 
-        # Losses
+        for j in range(7):
+            l = Variable(torch.LongTensor([el[j] for el in YI]).cuda(0))
+            lcar += self.criterion(p[0][0][0][j], l)
+
+        # for j in range(len(boxloc)):
+        #     l = torch.tensor(boxloc[j]).to(self.device)
+        #     a = p[0][1][j]
+        #     fpscar += self.fps_loss_fn(a, l)
+
         for i, pi in enumerate(p[1][0]):  # layer index, layer predictions
             b, a, gj, gi = indices[i]  # image, anchor, gridy, gridx
             tobj = torch.zeros(pi.shape[:4], dtype=pi.dtype, device=self.device)  # target obj
@@ -174,11 +188,6 @@ class ComputeLoss:
                     t[range(n), tcls[i]] = self.cp
                     lcls += self.BCEcls(pcls, t)  # BCE
 
-                # car loss
-        for j in range(7):
-            l = Variable(torch.LongTensor([el[j] for el in YI]).cuda(0))
-            lcar += self.criterion(p[0][0][j], l)
-
                 # Append targets to text file
                 # with open('targets.txt', 'a') as file:
                 #     [file.write('%11.5g ' * 4 % tuple(x) + '\n') for x in torch.cat((txy[i], twh[i]), 1)]
@@ -187,7 +196,9 @@ class ComputeLoss:
             lobj += obji * self.balance[i]  # obj loss
             if self.autobalance:
                 self.balance[i] = self.balance[i] * 0.9999 + 0.0001 / obji.detach().item()
-
+        # if boxloc is not None:
+        #     boxloc = torch.tensor(boxloc).to(p[0][1].device)
+        #     fpscar += self.fps_loss_fn(p[0][1], boxloc)
         if self.autobalance:
             self.balance = [x / self.balance[self.ssi] for x in self.balance]
         lbox *= self.hyp["box"]
@@ -196,8 +207,9 @@ class ComputeLoss:
         lcar *= self.hyp["car"]
         bs = tobj.shape[0]  # batch size
         lcar = lcar.view(-1)
+        # fpscar = fpscar.view(-1)
 
-        return (lbox + lobj + lcls + lcar) * bs, torch.cat((lbox, lobj, lcls, lcar)).detach()
+        return (lbox + lobj + lcls + lcar +fpscar ) * bs, torch.cat((lbox, lobj, lcls, lcar , fpscar)).detach()
 
     def build_targets(self, p, targets):
         """Prepares model targets from input targets (image,class,x,y,w,h) for loss computation, returning class, box,

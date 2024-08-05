@@ -86,6 +86,8 @@ class Loggers:
             "train/box_loss",
             "train/obj_loss",
             "train/cls_loss",  # train loss
+            "train/car_cls",
+            "train/car_fps",
             "metrics/precision",
             "metrics/recall",
             "metrics/mAP_0.5",
@@ -93,6 +95,8 @@ class Loggers:
             "val/box_loss",
             "val/obj_loss",
             "val/cls_loss",  # val loss
+            "val/car_cls",
+            "val/car_fps",
             "x/lr0",
             "x/lr1",
             "x/lr2",
@@ -252,7 +256,7 @@ class Loggers:
             n = len(x) + 1  # number of cols
             s = "" if file.exists() else (("%20s," * n % tuple(["epoch"] + self.keys)).rstrip(",") + "\n")  # add header
             with open(file, "a") as f:
-                f.write(s + ("%20.5g," * (n+2) % tuple([epoch] + vals)).rstrip(",") + "\n")
+                f.write(s + ("%20.5g," * n % tuple([epoch] + vals)).rstrip(",") + "\n")
         if self.ndjson_console or self.ndjson_file:
             json_data = json.dumps(dict(epoch=epoch, **x), default=_json_default)
         if self.ndjson_console:

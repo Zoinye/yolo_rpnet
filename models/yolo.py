@@ -163,20 +163,23 @@ class BaseModel(nn.Module):
         y, dt = [], []  # outputs
         z = []
         combined_results = []
+        conv=[]
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
             if profile:
                 self._profile_one_layer(m, x, dt)
             if isinstance(m, CombinedModel):
-                x = m(x,car_detect,YI)  # run,这个是detect检测出来的三个特征图
-            else :
+                x = m(x,car_detect,YI,conv[-1])  # run,这个是detect检测出来的三个特征图
+            else:
                 x = m(x)
             y.append(x if m.i in self.save else None)  # save output
             if visualize:
                 feature_visualization(x, m.type, m.i, save_dir=visualize)
             if isinstance(m, Detect):
                 z.append(x if m.i in self.save else None)
+            elif isinstance(m, Conv):
+                conv.append(x)
             elif isinstance(m, CombinedModel):
                 combined_results.append(x)
         return x, z
@@ -288,7 +291,7 @@ class DetectionModel(BaseModel):
         self.info()
         LOGGER.info("")
 
-    def forward(self, x, car_detect=[0,0,0,0],YI=[0,0,0,0,0,0,0],augment=False, profile=False, visualize=False):
+    def forward(self, x, car_detect=torch.zeros(2,4),YI=[0,0,0,0,0,0,0],augment=False, profile=False, visualize=False):
         """Performs single-scale or augmented inference and may include profiling or visualization."""
         if augment:
             return self._forward_augment(x)  # augmented inference, None

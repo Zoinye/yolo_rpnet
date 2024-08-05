@@ -1,5 +1,4 @@
 import logging
-
 from utils.general import non_max_suppression, xywh2xyxy
 from utils.metrics import box_iou
 
@@ -106,9 +105,6 @@ def adjust_roi(roi, max_height, max_width):
     return [x1, y1, x2, y2]
 
 
-import torch
-import torch.nn.functional as F
-
 def roi_pooling_ims_yuan(input, rois, size=(7, 7), spatial_scale=1.0):
     # written for one roi one image 从特征图中提取固定大小的特征
     # size: (w, h)
@@ -203,12 +199,9 @@ def roi_pooling_ims1(input, rois, size=(7, 7), spatial_scale=1.0):
         return torch.zeros((0, channels, size[0], size[1]), device=input.device)
 
 
-import torch
-import torch.nn as nn
-
 
 class wR2(nn.Module):
-    def __init__(self, flattened_size,num_classes=1000,):
+    def __init__(self, flattened_size,num_classes=1000):
         super(wR2, self).__init__()
         self.device = "cuda"
         self.classifier = nn.Sequential(
@@ -216,7 +209,7 @@ class wR2(nn.Module):
             # nn.ReLU(inplace=True),
             nn.Linear(100, 100),
             # nn.ReLU(inplace=True),
-            nn.Linear(100, num_classes),
+            nn.Linear(100, 4),
         ).to(self.device)
 
     def forward(self, x):
@@ -243,26 +236,34 @@ class CombinedModel(nn.Module):
         self.iou_thres = iou_thres
         self.detection_criterion = nn.MSELoss()  # Example detection loss (e.g., MSELoss)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        # self.wr2 = wR2(num_class).to(self.device)  # Ensure wr2 is on the correct device
-        self.wr2 = None
+        # self.wr2 = wR2().to(self.device)  # Ensure wr2 is on the correct device
+        # self.wr2 = None
         self.num_class = num_class
-    def forward(self, x, detection_targets,YI):
+        # self.conv1 = nn.Conv2d(in_channels=3, out_channels=12, kernel_size=3, stride=2, padding=1)
+        # self.conv2 = nn.Conv2d(in_channels=12, out_channels=48, kernel_size=3, stride=2, padding=1)
+        # self.conv3 = nn.Conv2d(in_channels=3, out_channels=12, kernel_size=3, stride=2, padding=1)
+
+    def forward(self, x, detection_targets,YI,conv):
         results = []
 
         # Check if x is a tuple with two elements
         if len(x) == 2:
             x1, x2, x3 = x[1]  # Assuming x[1] is a tuple of three tensors  # batchsize,
+            # x00 = self.conv1(x1)
+            # x11 = self.conv2(x00)
+            # x22=self.conv3(x2)
+            # inputs=[x11,x22,x3]
+            # x33=torch.cat(inputs,dim=0)
         else:
             x1, x2, x3 = x  # Assuming x is a tuple of three tensors
-        # x1=x1.to(dtype=torch.float16)
-        # x2=x2.to(dtype=torch.float16)
-        # x3=x3.to(dtype=torch.float16)
-        batchsize,channel,height,width,time=x3.shape
-        flattened_size = channel * height * width * time
+        # print(f"Input x1 shape: {x1.shape}")
+        batchsize,channel,height,width=conv.shape
+        flattened_size = channel * height * width  # 153600
         # Pass the third feature map through wR2 to get bounding box locations
-        if self.wr2 is None:
-            self.wr2 = wR2(flattened_size, self.num_class).to(self.device)  # Forward pass for bounding box prediction
-        boxLoc = self.wr2(x3)
+        # if self.wr2 is None:
+        wr2 = wR2(flattened_size, self.num_class).to(self.device)
+        boxLoc = wr2(conv) # Forward pass for bounding box prediction
+        # boxLoc = self.wr2(x1)
         # Extract feature map sizes
         h1, w1 = x1.size(2), x1.size(3)
         h2, w2 = x2.size(2), x2.size(3)
@@ -289,18 +290,18 @@ class CombinedModel(nn.Module):
         rois = torch.cat((roi1, roi2, roi3), dim=1).to(self.device)
         _rois = rois.view(rois.size(0), -1).to(self.device)
         _,input_size=_rois.shape
-        if self.license_plate_classifier==None:
+        if self.license_plate_classifier is None:
             self.license_plate_classifier=LicensePlateClassifier(input_size=input_size, prov_num=self.prov_num, alpha_num=self.alpha_num, ad_num=self.ad_num)
         class_preds = self.license_plate_classifier(_rois)
         results.append(class_preds)
+        boxNew = boxNew.to(self.device)
+        detection_targets = torch.tensor(detection_targets).to(self.device)
+        loss=torch.zeros(1,device=self.device)
+        loss += 0.8 * nn.L1Loss().cuda()(boxNew[:,:2], detection_targets[:,:2])  # 定位cen_x和cen_y损失
+        loss += 0.2 * nn.L1Loss().cuda()(boxNew[:,2:], detection_targets[:,2:])
+        loss=loss.view(-1)
 
-        # # Combine results
-        # if len(results) > 0:
-        #     results_tensor = torch.cat(results, dim=0)
-        # else:
-        #     results_tensor = torch.zeros((0, 7), device=self.device)
-
-        return results
+        return results,boxNew,loss
 
 # class CombinedModel(nn.Module):
 #     def __init__(self, input_size=640, prov_num=38, alpha_num=25, ad_num=35, conf_thres=0.25, iou_thres=0.45):
