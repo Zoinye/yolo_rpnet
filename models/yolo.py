@@ -266,18 +266,18 @@ class DetectionModel(BaseModel):
         if anchors:
             LOGGER.info(f"Overriding model.yaml anchors with anchors={anchors}")
             self.yaml["anchors"] = round(anchors)  # override yaml value
-        self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist
+        self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist  init model
         self.names = [str(i) for i in range(self.yaml["nc"])]  # default names
         self.inplace = self.yaml.get("inplace", True)
 
         # Build strides, anchors
         m = self.model[-2]  # Detect()
         if isinstance(m, (Detect, Segment)):
-            s = 256  # 2x min stride
+            s = 256  # 2x min stride   256
             m.inplace = self.inplace
             car_detect=[0,0,0,0]
             forward = lambda x: self.forward(x)[0] if isinstance(m, Segment) else self.forward(x)
-            _,rs=forward(torch.zeros(1, ch, s, s))
+            _,rs=forward(torch.zeros(1, ch, s, s))  #forward
             m.stride = torch.tensor([s / x.shape[-2] for x in rs[0]])  # forward torch.Size([1, 3, 32, 32, 8])
             # if m.stride==torch.tensor([]):
             #     m.stride = torch.tensor([8, 16, 32])
@@ -288,7 +288,7 @@ class DetectionModel(BaseModel):
 
         # Init weights, biases
         initialize_weights(self)
-        self.info()
+        self.info()  # 第二遍 计算层数，参数，梯度等 YOLOv5s summary: 245 layers, 8091510 parameters, 8091510 gradients, 16.8 GFLOPs 输入就是第一个模型参数
         LOGGER.info("")
 
     def forward(self, x, car_detect=torch.zeros(2,4),YI=[0,0,0,0,0,0,0],augment=False, profile=False, visualize=False):

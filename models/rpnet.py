@@ -19,22 +19,10 @@ class LicensePlateClassifier(nn.Module):
     def __init__(self, input_size=640, prov_num=38, alpha_num=25, ad_num=35, device='cuda',wrPath=None):
         super(LicensePlateClassifier, self).__init__()
         self.device = device
-        # self.load_wR2(wrPath)
         self.output_size = prov_num + alpha_num + ad_num
-        # self.num_class=num_class
-        # self.features = nn.Sequential(
-        #     nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1),
-        #     nn.ReLU(inplace=True),
-        #     nn.MaxPool2d(kernel_size=2, stride=2)
-        # ).to(device)
-
         self.prov_num = prov_num
         self.alpha_num = alpha_num
         self.ad_num = ad_num
-
-        # feature_map_size = input_size // 2
-        # flattened_size = 16 * feature_map_size * feature_map_size
-
         self.classifier1 = nn.Sequential(
             nn.Linear(input_size, 128),
             nn.ReLU(inplace=True),
@@ -245,10 +233,11 @@ class CombinedModel(nn.Module):
 
     def forward(self, x, detection_targets,YI,conv):
         results = []
-
+        conv = conv.float()
         # Check if x is a tuple with two elements
         if len(x) == 2:
-            x1, x2, x3 = x[1]  # Assuming x[1] is a tuple of three tensors  # batchsize,
+            x1, x2, x3 = x[1]  # float 32 Assuming x[1] is a tuple of three tensors  # batchsize,
+            # print(x1.dtype)
             # x00 = self.conv1(x1)
             # x11 = self.conv2(x00)
             # x22=self.conv3(x2)
@@ -256,13 +245,16 @@ class CombinedModel(nn.Module):
             # x33=torch.cat(inputs,dim=0)
         else:
             x1, x2, x3 = x  # Assuming x is a tuple of three tensors
+            # print(x1.dtype)
+
         # print(f"Input x1 shape: {x1.shape}")
-        batchsize,channel,height,width=conv.shape
-        flattened_size = channel * height * width  # 153600
+        batchsize,channel,height,width,time=x1.shape
+        flattened_size = channel * height * width * time  # 153600
         # Pass the third feature map through wR2 to get bounding box locations
         # if self.wr2 is None:
+
         wr2 = wR2(flattened_size, self.num_class).to(self.device)
-        boxLoc = wr2(conv) # Forward pass for bounding box prediction
+        boxLoc = wr2(x1) # Forward pass for bounding box prediction
         # boxLoc = self.wr2(x1)
         # Extract feature map sizes
         h1, w1 = x1.size(2), x1.size(3)
@@ -289,6 +281,7 @@ class CombinedModel(nn.Module):
         # Concatenate ROIs and pass through classifier
         rois = torch.cat((roi1, roi2, roi3), dim=1).to(self.device)
         _rois = rois.view(rois.size(0), -1).to(self.device)
+        _rois=_rois.float()
         _,input_size=_rois.shape
         if self.license_plate_classifier is None:
             self.license_plate_classifier=LicensePlateClassifier(input_size=input_size, prov_num=self.prov_num, alpha_num=self.alpha_num, ad_num=self.ad_num)

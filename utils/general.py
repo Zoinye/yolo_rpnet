@@ -625,7 +625,7 @@ def check_amp(model):
         m = AutoShape(model, verbose=False)  # model
         a = m(im).xywhn[0]  # FP32 inference
         m.amp = True
-        b = m(im).xywhn[0]  # AMP inference
+        b = m(im).xywhn[0]  # AMP inference #amp_allclose函数能够比较在两种精度设置下推理结果的相似度，从而验证AMP是否按预期工作。
         return a.shape == b.shape and torch.allclose(a, b, atol=0.1)  # close to 10% absolute tolerance
 
     prefix = colorstr("AMP: ")

@@ -891,7 +891,8 @@ class AutoShape(nn.Module):
         self.pt = not self.dmb or model.pt  # PyTorch model
         self.model = model.eval()
         if self.pt:
-            m = self.model.model.model[-1] if self.dmb else self.model.model[-1]  # Detect()
+            m = self.model.model.model[-1] if self.dmb else self.model.model[-1]  # Detect()  这边改了  原来是-1
+            # m = self.model.model.model[-1] if self.dmb else self.model.model[-1]  # Detect()  这边改了  原来是-1
             m.inplace = False  # Detect.inplace=False for safe multithread inference
             m.export = True  # do not output loss values
 
@@ -955,7 +956,7 @@ class AutoShape(nn.Module):
                 g = max(size) / max(s)  # gain
                 shape1.append([int(y * g) for y in s])
                 ims[i] = im if im.data.contiguous else np.ascontiguousarray(im)  # update
-            shape1 = [make_divisible(x, self.stride) for x in np.array(shape1).max(0)]  # inf shape
+            shape1 = [make_divisible(x, self.stride) for x in np.array(shape1).max(0)]  # inf shape  640，480
             x = [letterbox(im, shape1, auto=False)[0] for im in ims]  # pad
             x = np.ascontiguousarray(np.array(x).transpose((0, 3, 1, 2)))  # stack and BHWC to BCHW
             x = torch.from_numpy(x).to(p.device).type_as(p) / 255  # uint8 to fp16/32
@@ -968,7 +969,7 @@ class AutoShape(nn.Module):
             # Post-process
             with dt[2]:
                 y = non_max_suppression(
-                    y if self.dmb else y[0],
+                    y if self.dmb else y[1][0],
                     self.conf,
                     self.iou,
                     self.classes,

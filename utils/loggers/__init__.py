@@ -88,6 +88,8 @@ class Loggers:
             "train/cls_loss",  # train loss
             "train/car_cls",
             "train/car_fps",
+            "train/all_loss",
+            "train/all_item",
             "metrics/precision",
             "metrics/recall",
             "metrics/mAP_0.5",
@@ -97,6 +99,8 @@ class Loggers:
             "val/cls_loss",  # val loss
             "val/car_cls",
             "val/car_fps",
+            "val/all_loss",
+            "val/all_item",
             "x/lr0",
             "x/lr1",
             "x/lr2",

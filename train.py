@@ -198,7 +198,8 @@ def train(hyp, opt, device, callbacks):
         LOGGER.info(f"Transferred {len(csd)}/{len(model.state_dict())} items from {weights}")  # report
     else:
         model = Model(cfg, ch=3, nc=nc, anchors=hyp.get("anchors")).to(device)  # create
-    amp = check_amp(model)  # check AMP
+    # amp = check_amp(model)  # check AMP  第三次  计算是否使用amp自动混合精度（torch16和torch32）
+    amp=False
 
     # Freeze
     freeze = [f"model.{x}." for x in (freeze if len(freeze) > 1 else range(freeze[0]))]  # layers to freeze
@@ -399,6 +400,7 @@ def train(hyp, opt, device, callbacks):
                 pred = model(imgs,boxloc,YI)  # forward
                 fps=pred[0][2]
                 loss, loss_items = compute_loss(pred, targets.to(device),YI,fps)  # loss scaled by batch_size
+                print(loss)
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:
@@ -460,7 +462,15 @@ def train(hyp, opt, device, callbacks):
             stop = stopper(epoch=epoch, fitness=fi)  # early stop check
             if fi > best_fitness:
                 best_fitness = fi
-            log_vals = list(mloss) + list(results) + lr
+            print(loss)
+            train_loss=loss.tolist()
+            print(train_loss)
+            train_item=0
+            for i in loss_items:
+                train_item+=i
+            val_item=results[-1]+results[-2]+results[-3]+results[-4]+results[-5]
+            val_loss=val_item*4
+            log_vals = list(mloss) +train_loss+[train_item]+ list(results)+[val_loss]+[val_item] + lr
             callbacks.run("on_fit_epoch_end", log_vals, epoch, best_fitness, fi)
 
             # Save model

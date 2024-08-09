@@ -205,9 +205,14 @@ class ComputeLoss:
         lobj *= self.hyp["obj"]
         lcls *= self.hyp["cls"]
         lcar *= self.hyp["car"]
+        fpscar *= self.hyp["fps"]
+        # lbox *= 0
+        # lobj *= 0
+        # lcls *= 0
+        # lcar *= 0
         bs = tobj.shape[0]  # batch size
         lcar = lcar.view(-1)
-        # fpscar = fpscar.view(-1)
+
 
         return (lbox + lobj + lcls + lcar +fpscar ) * bs, torch.cat((lbox, lobj, lcls, lcar , fpscar)).detach()
 
